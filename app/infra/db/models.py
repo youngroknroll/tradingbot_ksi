@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, Index, Integer, Numeric, String, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, Numeric, String, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -46,7 +46,9 @@ class FillModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     fill_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
-    order_id: Mapped[str] = mapped_column(String(50), nullable=False)
+    order_id: Mapped[str] = mapped_column(
+        String(50), ForeignKey("orders.order_id"), nullable=False
+    )
     filled_quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     filled_price: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
     filled_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())

@@ -35,22 +35,20 @@ class ExecutionService:
         try:
             fill = await self._broker.submit_order(saved_order)
             if fill:
-                await self._order_repo.update_status(saved_order.order_id, OrderStatus.FILLED)
-                saved_order = Order(**{**saved_order.model_dump(), "status": OrderStatus.FILLED})
+                updated_order = await self._order_repo.update_status_atomic(
+                    saved_order.order_id, OrderStatus.FILLED, fill
+                )
                 logger.info(
                     "order_filled",
                     order_id=saved_order.order_id,
                     filled_price=str(fill.filled_price),
                     filled_quantity=fill.filled_quantity,
                 )
+                return updated_order, fill
             else:
                 await self._order_repo.update_status(saved_order.order_id, OrderStatus.SUBMITTED)
-                saved_order = Order(
-                    **{**saved_order.model_dump(), "status": OrderStatus.SUBMITTED}
-                )
+                return Order(**{**saved_order.model_dump(), "status": OrderStatus.SUBMITTED}), None
         except Exception as e:
             await self._order_repo.update_status(saved_order.order_id, OrderStatus.REJECTED)
             logger.error("order_rejected", order_id=saved_order.order_id, error=str(e))
             raise
-
-        return saved_order, fill

@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 from decimal import Decimal
 
@@ -31,7 +32,7 @@ class Signal(BaseModel):
 
 
 class Order(BaseModel):
-    order_id: str = ""
+    order_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     symbol: str
     side: OrderSide
     quantity: int
@@ -43,7 +44,7 @@ class Order(BaseModel):
 
 
 class Fill(BaseModel):
-    fill_id: str = ""
+    fill_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     order_id: str
     filled_quantity: int
     filled_price: Decimal
@@ -69,4 +70,4 @@ class RiskRule(BaseModel):
     max_position_size: Decimal = Decimal("1000000")
     max_daily_loss: Decimal = Decimal("50000")
     max_symbol_exposure: Decimal = Decimal("500000")
-    stop_loss_percent: float = 3.0
+    stop_loss_percent: Decimal = Decimal("3.0")

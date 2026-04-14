@@ -4,9 +4,9 @@ from typing import List, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.entities import Order
+from app.domain.entities import Fill, Order
 from app.domain.enums import OrderStatus
-from app.infra.db.models import OrderModel
+from app.infra.db.models import FillModel, OrderModel
 
 
 class OrderRepository:
@@ -56,9 +56,42 @@ class OrderRepository:
             row.status = status.value
             await self._session.commit()
 
+    async def update_status_atomic(
+        self, order_id: str, status: OrderStatus, fill: Fill
+    ) -> Order:
+        stmt = select(OrderModel).where(OrderModel.order_id == order_id)
+        result = await self._session.execute(stmt)
+        row = result.scalar_one_or_none()
+        if row is None:
+            raise ValueError(f"Order {order_id} not found")
+
+        row.status = status.value
+
+        fill_model = FillModel(
+            fill_id=fill.fill_id,
+            order_id=fill.order_id,
+            filled_quantity=fill.filled_quantity,
+            filled_price=fill.filled_price,
+            filled_at=fill.filled_at,
+        )
+        self._session.add(fill_model)
+        await self._session.commit()
+
+        return Order(
+            order_id=row.order_id,
+            symbol=row.symbol,
+            side=row.side,
+            quantity=row.quantity,
+            price=row.price,
+            order_type=row.order_type,
+            status=row.status,
+            idempotency_key=row.idempotency_key,
+            created_at=row.created_at,
+        )
+
     async def get_open_orders(self, symbol: Optional[str] = None) -> List[Order]:
         stmt = select(OrderModel).where(
-            OrderModel.status.in_([OrderStatus.PENDING, OrderStatus.SUBMITTED])
+            OrderModel.status.in_([OrderStatus.PENDING.value, OrderStatus.SUBMITTED.value])
         )
         if symbol:
             stmt = stmt.where(OrderModel.symbol == symbol)

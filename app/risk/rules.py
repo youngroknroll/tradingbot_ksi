@@ -49,7 +49,7 @@ def check_stop_loss(
     if position.quantity <= 0:
         return RiskCheckResult(passed=True)
 
-    loss_percent = float(
+    loss_percent = (
         (position.average_price - current_price) / position.average_price * 100
     )
     if loss_percent >= rule.stop_loss_percent:

@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import List, Optional
 
@@ -18,6 +19,8 @@ from app.strategy.base import Strategy
 from app.strategy.service import StrategyService
 
 logger = get_logger(__name__)
+
+_LOOKBACK_DAYS = 60
 
 
 class PaperTradingService:
@@ -40,12 +43,16 @@ class PaperTradingService:
         self._running = False
 
     async def run_cycle(self) -> None:
+        today = datetime.now()
+        start_date = (today - timedelta(days=_LOOKBACK_DAYS)).strftime("%Y%m%d")
+        end_date = today.strftime("%Y%m%d")
+
         for symbol in self._symbols:
             try:
                 candles = await self._market_data.fetch_daily_candles(
                     symbol,
-                    start_date="20260101",
-                    end_date="20260413",
+                    start_date=start_date,
+                    end_date=end_date,
                 )
                 signal = self._strategy_service.evaluate(candles)
                 if signal is None or signal.action == SignalAction.HOLD:
@@ -70,6 +77,7 @@ class PaperTradingService:
                     order = create_order_from_signal(
                         signal, position.quantity, current_price
                     )
+                    self._risk.validate_order(order, account)
                     order_result, fill = await self._execution.submit_order(order)
                     if fill:
                         await self._portfolio.update_on_fill(order_result, fill)

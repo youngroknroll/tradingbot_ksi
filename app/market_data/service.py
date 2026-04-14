@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import List, Optional
 
@@ -11,14 +11,30 @@ from app.domain.entities import Candle
 
 logger = get_logger(__name__)
 
+_TOKEN_REFRESH_MARGIN_HOURS = 1
+
 
 class MarketDataService:
     def __init__(self) -> None:
         self._access_token: str = ""
         self._token_expires: Optional[datetime] = None
+        self._client: Optional[httpx.AsyncClient] = None
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=10.0)
+        return self._client
+
+    async def close(self) -> None:
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
 
     async def _get_access_token(self) -> str:
-        if self._access_token and self._token_expires and datetime.now() < self._token_expires:
+        if (
+            self._access_token
+            and self._token_expires
+            and datetime.now() < self._token_expires
+        ):
             return self._access_token
 
         url = f"{settings.kis_base_url}/oauth2/tokenP"
@@ -27,16 +43,21 @@ class MarketDataService:
             "appkey": settings.kis_app_key,
             "appsecret": settings.kis_app_secret,
         }
-        async with httpx.AsyncClient() as client:
-            try:
-                resp = await client.post(url, json=body, timeout=10.0)
-                resp.raise_for_status()
-                data = resp.json()
-                self._access_token = data["access_token"]
-                self._token_expires = datetime.now()
-                return self._access_token
-            except httpx.HTTPError as e:
-                raise MarketDataError(f"Failed to get access token: {e}") from e
+        client = await self._get_client()
+        try:
+            resp = await client.post(url, json=body)
+            resp.raise_for_status()
+            data = resp.json()
+            self._access_token = data["access_token"]
+            expires_in = int(data.get("expires_in", 86400))
+            self._token_expires = datetime.now() + timedelta(
+                seconds=expires_in
+            ) - timedelta(hours=_TOKEN_REFRESH_MARGIN_HOURS)
+            return self._access_token
+        except httpx.HTTPError as e:
+            self._access_token = ""
+            self._token_expires = None
+            raise MarketDataError(f"Failed to get access token: {e}") from e
 
     async def fetch_daily_candles(
         self, symbol: str, start_date: str, end_date: str
@@ -59,13 +80,13 @@ class MarketDataService:
             "FID_ORG_ADJ_PRC": "0",
         }
 
-        async with httpx.AsyncClient() as client:
-            try:
-                resp = await client.get(url, headers=headers, params=params, timeout=10.0)
-                resp.raise_for_status()
-                data = resp.json()
-            except httpx.HTTPError as e:
-                raise MarketDataError(f"Failed to fetch candles for {symbol}: {e}") from e
+        client = await self._get_client()
+        try:
+            resp = await client.get(url, headers=headers, params=params)
+            resp.raise_for_status()
+            data = resp.json()
+        except httpx.HTTPError as e:
+            raise MarketDataError(f"Failed to fetch candles for {symbol}: {e}") from e
 
         candles: List[Candle] = []
         for item in data.get("output2", []):
@@ -101,11 +122,11 @@ class MarketDataService:
             "FID_INPUT_ISCD": symbol,
         }
 
-        async with httpx.AsyncClient() as client:
-            try:
-                resp = await client.get(url, headers=headers, params=params, timeout=10.0)
-                resp.raise_for_status()
-                data = resp.json()
-                return Decimal(data["output"]["stck_prpr"])
-            except (httpx.HTTPError, KeyError) as e:
-                raise MarketDataError(f"Failed to fetch price for {symbol}: {e}") from e
+        client = await self._get_client()
+        try:
+            resp = await client.get(url, headers=headers, params=params)
+            resp.raise_for_status()
+            data = resp.json()
+            return Decimal(data["output"]["stck_prpr"])
+        except (httpx.HTTPError, KeyError) as e:
+            raise MarketDataError(f"Failed to fetch price for {symbol}: {e}") from e

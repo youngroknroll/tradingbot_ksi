@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.auth import verify_api_key
 from app.infra.db.connection import get_session
 from app.infra.repositories.position_repo import PositionRepository
 from app.monitoring.healthcheck import HealthCheckService
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_api_key)])
 
 
 @router.get("/health")

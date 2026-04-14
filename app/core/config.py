@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql+asyncpg://user:password@localhost:5432/tradingbot"
+    database_url: str = ""
 
     kis_app_key: str = ""
     kis_app_secret: str = ""
@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     max_position_size: int = 1_000_000
     max_daily_loss: int = 50_000
     stop_loss_percent: float = 3.0
+
+    api_key: str = ""
 
     log_level: str = "INFO"
 

@@ -14,7 +14,7 @@ class TestRiskRules:
         self.rule = RiskRule(
             max_position_size=Decimal("1000000"),
             max_daily_loss=Decimal("50000"),
-            stop_loss_percent=3.0,
+            stop_loss_percent=Decimal("3.0"),
         )
 
     def test_position_size_within_limit(self):
